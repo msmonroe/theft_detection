@@ -200,6 +200,10 @@ class RetailTheftDetector:
         print(f"Analyzing: {image_path}")
         print(f"{'='*70}")
         
+        # Validate image file exists
+        if not os.path.exists(image_path):
+            raise FileNotFoundError(f"Image file not found: {image_path}")
+        
         try:
             # STEP 1: Call Azure AI Vision API
             # This returns people, objects, tags, and caption
@@ -245,9 +249,13 @@ class RetailTheftDetector:
             
             print(f"✓ Analysis complete: {len(alerts)} alert(s)")
             
+        except FileNotFoundError:
+            raise  # Re-raise file not found errors
         except Exception as e:
-            print(f"✗ Error: {str(e)}")
-            # In production, log to monitoring system
+            print(f"✗ Error during analysis: {str(e)}")
+            import traceback
+            print(f"✗ Traceback: {traceback.format_exc()}")
+            # Return empty list on error rather than crashing
         
         return alerts
     
@@ -662,23 +670,32 @@ class RetailTheftDetector:
             polygon: List of (x, y) vertices
             
         Returns:
-            True if point inside polygon
+            True if point inside polygon, False if outside or invalid polygon
         """
+        # Validate polygon
+        if not polygon or len(polygon) < 3:
+            return False  # Invalid polygon, needs at least 3 points
+        
         x, y = point
         n = len(polygon)
         inside = False
         
-        p1x, p1y = polygon[0]
-        for i in range(1, n + 1):
-            p2x, p2y = polygon[i % n]
-            if y > min(p1y, p2y):
-                if y <= max(p1y, p2y):
-                    if x <= max(p1x, p2x):
-                        if p1y != p2y:
-                            xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
-                        if p1x == p2x or x <= xinters:
-                            inside = not inside
-            p1x, p1y = p2x, p2y
+        try:
+            p1x, p1y = polygon[0]
+            for i in range(1, n + 1):
+                p2x, p2y = polygon[i % n]
+                if y > min(p1y, p2y):
+                    if y <= max(p1y, p2y):
+                        if x <= max(p1x, p2x):
+                            if p1y != p2y:
+                                xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                            if p1x == p2x or x <= xinters:
+                                inside = not inside
+                p1x, p1y = p2x, p2y
+        except (TypeError, ValueError, IndexError) as e:
+            # Handle invalid coordinates gracefully
+            print(f"Warning: Invalid polygon coordinates: {e}")
+            return False
         
         return inside
     
@@ -870,25 +887,43 @@ class RetailTheftDetector:
 # =============================================================================
 
 def create_demo_image(filename: str = "demo_store.jpg"):
-    """Create a demo image for testing without Azure."""
-    import cv2
-    import numpy as np
+    """
+    Create a demo image for testing without Azure.
     
-    # Create a simple store scene
-    img = np.ones((480, 640, 3), dtype=np.uint8) * 200
-    
-    # Add some colored rectangles to simulate a store
-    cv2.rectangle(img, (50, 100), (200, 400), (150, 150, 150), -1)  # Person
-    cv2.rectangle(img, (300, 150), (500, 350), (100, 100, 200), 2)  # Display
-    cv2.rectangle(img, (550, 50), (620, 150), (200, 100, 100), -1)  # Exit sign
-    
-    # Add text
-    cv2.putText(img, "DEMO STORE", (200, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)
-    cv2.putText(img, "Person", (80, 250), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
-    cv2.putText(img, "EXIT", (555, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-    
-    cv2.imwrite(filename, img)
-    return filename
+    Args:
+        filename: Path where the demo image should be saved
+        
+    Returns:
+        str: Path to the created image
+        
+    Raises:
+        IOError: If the image cannot be created or saved
+    """
+    try:
+        import cv2
+        import numpy as np
+        
+        # Create a simple store scene
+        img = np.ones((480, 640, 3), dtype=np.uint8) * 200
+        
+        # Add some colored rectangles to simulate a store
+        cv2.rectangle(img, (50, 100), (200, 400), (150, 150, 150), -1)  # Person
+        cv2.rectangle(img, (300, 150), (500, 350), (100, 100, 200), 2)  # Display
+        cv2.rectangle(img, (550, 50), (620, 150), (200, 100, 100), -1)  # Exit sign
+        
+        # Add text
+        cv2.putText(img, "DEMO STORE", (200, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)
+        cv2.putText(img, "Person", (80, 250), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
+        cv2.putText(img, "EXIT", (555, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+        
+        # Save the image
+        success = cv2.imwrite(filename, img)
+        if not success:
+            raise IOError(f"Failed to save demo image to {filename}")
+        
+        return filename
+    except Exception as e:
+        raise IOError(f"Error creating demo image: {str(e)}") from e
 
 
 class MockVisionClient:
@@ -953,11 +988,68 @@ def main():
     except ImportError:
         print("ℹ️  python-dotenv not installed. Install with: pip install python-dotenv")
         print("   You can still use environment variables.\n")
+    except Exception as e:
+        print(f"⚠️  Error loading .env file: {str(e)}\n")
     
-    # Get credentials from environment
+    # Get configuration from environment
     endpoint = os.getenv("AZURE_VISION_ENDPOINT")
     key = os.getenv("AZURE_VISION_KEY")
     demo_mode = os.getenv("DEMO_MODE", "false").lower() == "true"
+    
+    # Instrumentation settings
+    enable_logging = os.getenv("ENABLE_LOGGING", "true").lower() == "true"
+    log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+    log_to_console = os.getenv("LOG_TO_CONSOLE", "true").lower() == "true"
+    log_to_file = os.getenv("LOG_TO_FILE", "true").lower() == "true"
+    log_directory = os.getenv("LOG_DIRECTORY", "./logs")
+    enable_monitoring = os.getenv("ENABLE_MONITORING", "true").lower() == "true"
+    
+    # Display configuration
+    if enable_logging:
+        print(f"📊 Logging: Enabled (Level: {log_level})")
+        if log_to_file:
+            print(f"   Log Directory: {log_directory}")
+    else:
+        print("📊 Logging: Disabled")
+    
+    if enable_monitoring:
+        print("📈 Performance Monitoring: Enabled")
+    else:
+        print("📈 Performance Monitoring: Disabled")
+    print()
+    
+    # Initialize logger if enabled
+    logger = None
+    monitor = None
+    if enable_logging:
+        try:
+            from logging_instrumentation import TheftDetectionLogger, PerformanceMonitor
+            import logging as log_module
+            
+            # Map log level string to logging constant
+            log_level_map = {
+                'DEBUG': log_module.DEBUG,
+                'INFO': log_module.INFO,
+                'WARNING': log_module.WARNING,
+                'ERROR': log_module.ERROR,
+                'CRITICAL': log_module.CRITICAL
+            }
+            
+            logger = TheftDetectionLogger(
+                name="RetailTheftDetection",
+                log_dir=log_directory,
+                log_level=log_level_map.get(log_level, log_module.INFO),
+                enable_console=log_to_console,
+                enable_file=log_to_file
+            )
+            
+            if enable_monitoring:
+                monitor = PerformanceMonitor(logger)
+            
+            logger.info("Application started")
+            logger.info(f"Demo mode: {demo_mode}")
+        except Exception as e:
+            print(f"⚠️  Could not initialize logging: {str(e)}\n")
     
     # Check if we should run in demo mode
     if demo_mode or (not endpoint or not key):

@@ -265,8 +265,12 @@ class TestRetailTheftDetector(unittest.TestCase):
     
     
     @patch('retail_theft_detection.open', create=True)
-    def test_analyze_frame_with_mocked_api(self, mock_open):
+    @patch('os.path.exists')
+    def test_analyze_frame_with_mocked_api(self, mock_exists, mock_open):
         """Test frame analysis with mocked Azure API response."""
+        # Mock file existence check
+        mock_exists.return_value = True
+        
         detector = RetailTheftDetector(
             endpoint=self.mock_endpoint,
             key=self.mock_key
@@ -557,6 +561,274 @@ class TestIntegration(unittest.TestCase):
         
         # Verify report was created
         self.assertTrue(os.path.exists(report_path))
+
+
+class TestDemoMode(unittest.TestCase):
+    """Test cases for demo mode functionality."""
+    
+    def setUp(self):
+        """Set up test fixtures."""
+        self.test_dir = tempfile.mkdtemp()
+    
+    def tearDown(self):
+        """Clean up after tests."""
+        # Close all logging handlers
+        logging.shutdown()
+        time.sleep(0.1)
+        
+        if os.path.exists(self.test_dir):
+            try:
+                shutil.rmtree(self.test_dir)
+            except PermissionError:
+                time.sleep(0.5)
+                shutil.rmtree(self.test_dir)
+    
+    def test_create_demo_image(self):
+        """Test demo image creation."""
+        from retail_theft_detection import create_demo_image
+        
+        demo_path = os.path.join(self.test_dir, "test_demo.jpg")
+        result_path = create_demo_image(demo_path)
+        
+        # Verify image was created
+        self.assertTrue(os.path.exists(result_path))
+        self.assertEqual(result_path, demo_path)
+        
+        # Verify it's a valid image
+        img = cv2.imread(result_path)
+        self.assertIsNotNone(img)
+        self.assertEqual(img.shape, (480, 640, 3))
+    
+    def test_mock_vision_client(self):
+        """Test mock Azure Vision client."""
+        from retail_theft_detection import MockVisionClient
+        
+        mock_client = MockVisionClient()
+        
+        # Test analyze method
+        result = mock_client.analyze(
+            image_data=b"fake_data",
+            visual_features=[]
+        )
+        
+        # Verify result structure
+        self.assertIsNotNone(result.people)
+        self.assertIsNotNone(result.objects)
+        self.assertIsNotNone(result.tags)
+        self.assertIsNotNone(result.caption)
+        
+        # Verify mock data
+        self.assertEqual(len(result.people.list), 1)
+        self.assertGreater(result.people.list[0].confidence, 0.9)
+    
+    def test_demo_mode_detection(self):
+        """Test detection in demo mode."""
+        from retail_theft_detection import RetailTheftDetector, MockVisionClient, create_demo_image
+        
+        # Create detector
+        detector = RetailTheftDetector(
+            endpoint="https://demo.cognitiveservices.azure.com/",
+            key="demo-key-32-characters-long-xx"
+        )
+        
+        # Replace with mock client
+        detector.vision_client = MockVisionClient()
+        
+        # Create demo image
+        demo_path = create_demo_image(os.path.join(self.test_dir, "demo.jpg"))
+        
+        # Run detection
+        alerts = detector.analyze_frame(demo_path, frame_number=1)
+        
+        # Verify it runs without errors
+        self.assertIsInstance(alerts, list)
+    
+    def test_env_loading(self):
+        """Test environment variable loading."""
+        # Set test environment variables
+        os.environ['TEST_DEMO_MODE'] = 'true'
+        os.environ['TEST_ENABLE_LOGGING'] = 'false'
+        
+        # Test reading
+        demo_mode = os.getenv('TEST_DEMO_MODE', 'false').lower() == 'true'
+        enable_logging = os.getenv('TEST_ENABLE_LOGGING', 'true').lower() == 'true'
+        
+        self.assertTrue(demo_mode)
+        self.assertFalse(enable_logging)
+        
+        # Cleanup
+        del os.environ['TEST_DEMO_MODE']
+        del os.environ['TEST_ENABLE_LOGGING']
+
+
+class TestErrorHandling(unittest.TestCase):
+    """Test cases for error handling and edge cases."""
+    
+    def setUp(self):
+        """Set up test fixtures."""
+        self.test_dir = tempfile.mkdtemp()
+        self.patcher = patch('retail_theft_detection.ImageAnalysisClient')
+        self.mock_client_class = self.patcher.start()
+        self.mock_vision_client = MagicMock()
+        self.mock_client_class.return_value = self.mock_vision_client
+    
+    def tearDown(self):
+        """Clean up after tests."""
+        self.patcher.stop()
+        logging.shutdown()
+        time.sleep(0.1)
+        
+        if os.path.exists(self.test_dir):
+            try:
+                shutil.rmtree(self.test_dir)
+            except PermissionError:
+                time.sleep(0.5)
+                shutil.rmtree(self.test_dir)
+    
+    def test_missing_image_file(self):
+        """Test handling of missing image file."""
+        detector = RetailTheftDetector(
+            endpoint="https://test.cognitiveservices.azure.com/",
+            key="test-key-32-characters-long-xxx"
+        )
+        
+        # Try to analyze non-existent file
+        with self.assertRaises(FileNotFoundError):
+            detector.analyze_frame("nonexistent_image.jpg")
+    
+    def test_invalid_zone_coordinates(self):
+        """Test handling of invalid zone coordinates."""
+        detector = RetailTheftDetector(
+            endpoint="https://test.cognitiveservices.azure.com/",
+            key="test-key-32-characters-long-xxx"
+        )
+        
+        # Test with empty polygon
+        result = detector._point_in_polygon((50, 50), [])
+        self.assertFalse(result)
+        
+        # Test with single point polygon
+        result = detector._point_in_polygon((50, 50), [(0, 0)])
+        self.assertFalse(result)
+    
+    def test_api_error_handling(self):
+        """Test API error handling."""
+        detector = RetailTheftDetector(
+            endpoint="https://test.cognitiveservices.azure.com/",
+            key="test-key-32-characters-long-xxx"
+        )
+        
+        # Create test image
+        test_image = os.path.join(self.test_dir, "test.jpg")
+        img = np.zeros((100, 100, 3), dtype=np.uint8)
+        cv2.imwrite(test_image, img)
+        
+        # Mock API to raise error
+        self.mock_vision_client.analyze.side_effect = Exception("API Error")
+        
+        # Should handle error gracefully
+        alerts = detector.analyze_frame(test_image)
+        
+        # Should return empty list on error
+        self.assertEqual(len(alerts), 0)
+    
+    def test_empty_detection_results(self):
+        """Test handling of empty detection results."""
+        detector = RetailTheftDetector(
+            endpoint="https://test.cognitiveservices.azure.com/",
+            key="test-key-32-characters-long-xxx"
+        )
+        
+        # Create test image
+        test_image = os.path.join(self.test_dir, "test.jpg")
+        img = np.zeros((100, 100, 3), dtype=np.uint8)
+        cv2.imwrite(test_image, img)
+        
+        # Mock empty results
+        mock_result = MagicMock()
+        mock_result.people = None
+        mock_result.objects = None
+        mock_result.tags = None
+        mock_result.caption = None
+        
+        self.mock_vision_client.analyze.return_value = mock_result
+        
+        # Should handle gracefully
+        alerts = detector.analyze_frame(test_image)
+        self.assertEqual(len(alerts), 0)
+
+
+class TestInstrumentation(unittest.TestCase):
+    """Test cases for configurable instrumentation."""
+    
+    def setUp(self):
+        """Set up test fixtures."""
+        self.test_dir = tempfile.mkdtemp()
+    
+    def tearDown(self):
+        """Clean up after tests."""
+        logging.shutdown()
+        time.sleep(0.1)
+        
+        if os.path.exists(self.test_dir):
+            try:
+                shutil.rmtree(self.test_dir)
+            except PermissionError:
+                time.sleep(0.5)
+                shutil.rmtree(self.test_dir)
+    
+    def test_logging_disabled(self):
+        """Test running with logging disabled."""
+        logger = TheftDetectionLogger(
+            name="TestLogger",
+            log_dir=self.test_dir,
+            enable_console=False,
+            enable_file=False
+        )
+        
+        # Should work without file handlers
+        logger.info("Test message")
+        
+        # No log files should be created
+        log_files = [f for f in os.listdir(self.test_dir) if f.endswith('.log')]
+        self.assertEqual(len(log_files), 0)
+    
+    def test_monitoring_configuration(self):
+        """Test performance monitoring can be configured."""
+        logger = TheftDetectionLogger(
+            name="TestLogger",
+            log_dir=self.test_dir
+        )
+        
+        monitor = PerformanceMonitor(logger)
+        
+        # Test that monitoring works
+        monitor.record_api_call("test", 100.0, success=True)
+        stats = monitor.get_statistics()
+        
+        self.assertEqual(stats['counters']['total_api_calls'], 1)
+    
+    def test_log_level_configuration(self):
+        """Test that log levels can be configured."""
+        # Test DEBUG level
+        logger = TheftDetectionLogger(
+            name="TestLogger",
+            log_dir=self.test_dir,
+            log_level=logging.DEBUG,
+            enable_console=False
+        )
+        
+        self.assertEqual(logger.logger.level, logging.DEBUG)
+        
+        # Test WARNING level
+        logger2 = TheftDetectionLogger(
+            name="TestLogger2",
+            log_dir=self.test_dir,
+            log_level=logging.WARNING,
+            enable_console=False
+        )
+        
+        self.assertEqual(logger2.logger.level, logging.WARNING)
 
 
 # Test runner
