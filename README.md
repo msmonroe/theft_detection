@@ -1,8 +1,100 @@
-# Theft Detection Project
+# Retail Theft Detection System
 
-## Overview
+A comprehensive retail theft detection system using Azure AI Vision, refactored following Clean Code principles and SOLID design patterns.
 
-This project is designed to detect theft using advanced algorithms and logging instrumentation. It includes Python scripts for logging, theft detection, and a test suite to ensure the functionality of the system. Additionally, it integrates Azure AI Vision for advanced computer vision capabilities, making it suitable for retail theft detection scenarios.
+## 📁 Project Structure
+
+```
+theft_detection/
+│
+├── src/                              # Source code (refactored)
+│   ├── __init__.py
+│   ├── config.py                     # Configuration constants
+│   ├── validators.py                 # Input validation
+│   ├── geometry_utils.py             # Geometric calculations
+│   ├── vision_analyzer.py            # Azure AI Vision integration
+│   ├── person_tracker.py             # Person tracking logic
+│   ├── zone_monitor.py               # Zone monitoring
+│   ├── alert_manager.py              # Alert management
+│   ├── behavior_analyzer.py          # Behavior analysis
+│   ├── detection_orchestrator.py     # Detection coordination
+│   ├── retail_theft_detection.py     # Main system (refactored)
+│   └── demo_mock.py                  # Mock client for testing
+│
+├── tests/                            # Test files
+│   ├── __init__.py
+│   └── test_theft_detection.py
+│
+├── utils/                            # Utility modules
+│   ├── __init__.py
+│   └── logging_instrumentation.py    # Logging and monitoring
+│
+├── legacy/                           # Original code (archived)
+│   └── retail_theft_detection_original.py
+│
+├── docs/                             # Documentation
+│   ├── REFACTORING_COMPLETE.md       # Quick start guide
+│   ├── REFACTORING_SUMMARY.md        # Detailed refactoring overview
+│   ├── MODULE_GUIDE.md               # Module usage guide
+│   ├── BEFORE_AFTER_EXAMPLES.md      # Code comparison examples
+│   ├── LOGGING_GUIDE.md              # Logging documentation
+│   └── ENHANCEMENTS.md               # Enhancement ideas
+│
+├── logs/                             # Log files (generated)
+├── __pycache__/                      # Python cache (generated)
+│
+├── main.py                           # Main entry point
+├── README.md                         # This file
+├── QUICKSTART.md                     # Quick start guide
+├── requirements.txt                  # Python dependencies
+└── demo_report.json                  # Demo output
+
+```
+
+## 🚀 Quick Start
+
+### Installation
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### Running the System
+
+#### Option 1: Demo Mode (No Azure credentials needed)
+```bash
+python main.py
+```
+
+#### Option 2: With Azure AI Vision
+```bash
+# Set environment variables
+export AZURE_VISION_ENDPOINT="https://your-resource.cognitiveservices.azure.com/"
+export AZURE_VISION_KEY="your-32-character-key"
+
+python main.py
+```
+
+#### Option 3: Programmatic Usage
+```python
+from src import RetailTheftDetector
+
+# Initialize detector
+detector = RetailTheftDetector(
+    endpoint="https://your-endpoint.cognitiveservices.azure.com/",
+    key="your-key"
+)
+
+# Analyze an image
+alerts = detector.analyze_frame("store_image.jpg")
+
+# Process a video
+detector.process_video("store_footage.mp4", output_dir="./alerts")
+
+# Generate report
+detector.generate_report("theft_report.json")
+```
 
 ## Features
 
