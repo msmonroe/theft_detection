@@ -1,0 +1,32 @@
+# Azure AI Vision Retail Theft Detection System
+# Requirements file
+
+# Azure AI Vision SDK
+azure-ai-vision-imageanalysis>=1.0.0
+
+# Azure Core (for credentials and error handling)
+azure-core>=1.26.0
+
+# Computer Vision / Video Processing
+opencv-python>=4.8.0
+
+# Numerical operations
+numpy>=1.24.0
+
+# Testing dependencies
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-mock>=3.11.0
+
+# Azure Application Insights (optional)
+opencensus-ext-azure>=1.1.9
+opencensus>=0.11.2
+
+# Optional: For enhanced tracking
+# scipy>=1.10.0
+
+# Optional: For advanced tracking algorithms
+# filterpy>=1.4.5
+
+# Optional: For performance monitoring
+# psutil>=5.9.0
