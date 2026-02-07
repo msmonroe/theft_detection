@@ -1,6 +1,7 @@
 # Theft Detection Project
 
 ## Overview
+
 This project is designed to detect theft using advanced algorithms and logging instrumentation. It includes Python scripts for logging, theft detection, and a test suite to ensure the functionality of the system. Additionally, it integrates Azure AI Vision for advanced computer vision capabilities, making it suitable for retail theft detection scenarios.
 
 ## Features
@@ -15,7 +16,7 @@ This project is designed to detect theft using advanced algorithms and logging i
 
 ## Architecture
 
-```
+```text
 ┌─────────────────┐
 │ Video Source    │ (Camera/File)
 └────────┬────────┘
@@ -58,39 +59,96 @@ This project is designed to detect theft using advanced algorithms and logging i
 - **test_theft_detection.py**: Includes test cases to validate the functionality of the theft detection system.
 - **requirements.txt**: Lists the dependencies required to run the project.
 - **LOGGING_GUIDE.md**: Provides guidelines and documentation for the logging instrumentation.
+- **.env.example**: Template for environment variables configuration.
+- **.gitignore**: Git ignore file to prevent committing sensitive data.
 
 ## Prerequisites
 
-1. **Azure Account**  
-   - Active Azure subscription ([Create free account](https://azure.microsoft.com/free/))
+1. **Python Environment**  
+   - Python 3.8 or higher  
+   - pip package manager
 
-2. **Azure AI Vision Resource**  
+2. **Azure Account (Optional for Demo)**  
+   - Active Azure subscription ([Create free account](https://azure.microsoft.com/free/))
    - Create Computer Vision resource in Azure Portal  
    - Note your Endpoint and Key
 
-3. **Python Environment**  
-   - Python 3.8 or higher  
-   - pip package manager
+**Note:** You can run the system in demo mode without Azure credentials!
 
 ## Installation
 
 1. Clone the repository:
-   ```
+
+   ```bash
    git clone <repository-url>
    ```
+
 2. Navigate to the project directory:
-   ```
+
+   ```bash
    cd theft_detection
    ```
+
 3. Install the required dependencies:
-   ```
+
+   ```bash
    pip install -r requirements.txt
+   ```
+
+4. **Configure Azure Credentials (Optional)**:
+
+   Create a `.env` file from the template:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   Edit `.env` and add your Azure credentials:
+
+   ```ini
+   AZURE_VISION_ENDPOINT=https://your-resource.cognitiveservices.azure.com/
+   AZURE_VISION_KEY=your-32-character-key-here
+   DEMO_MODE=false
+   ```
+
+   **Or run in demo mode** (no Azure keys needed):
+
+   ```ini
+   DEMO_MODE=true
+   ```
+
+## Quick Start
+
+### Demo Mode (No Azure Required)
+
+Run the system immediately without any Azure credentials:
+
+```bash
+python retail_theft_detection.py
+```
+
+The system will:
+- Automatically detect missing Azure credentials
+- Switch to demo mode
+- Create a sample store image
+- Run mock analysis with simulated detections
+- Generate a demo report
+
+### Production Mode (With Azure AI Vision)
+
+1. Set up your `.env` file with Azure credentials (see Installation step 4)
+
+2. Run the system:
+
+   ```bash
+   python retail_theft_detection.py
    ```
 
 ## Usage
 
 Run the main script to start the theft detection system:
-```
+
+```bash
 python retail_theft_detection.py
 ```
 
@@ -126,7 +184,8 @@ detector.process_video(
 ## Testing
 
 To run the test suite, execute the following command:
-```
+
+```bash
 pytest test_theft_detection.py
 ```
 

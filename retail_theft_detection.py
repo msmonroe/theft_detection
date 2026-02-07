@@ -25,6 +25,7 @@ import json
 from datetime import datetime, timedelta
 from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass, asdict
+from enum import Enum
 import cv2
 import numpy as np
 
@@ -37,6 +38,13 @@ from azure.core.credentials import AzureKeyCredential
 # =============================================================================
 # DATA STRUCTURES
 # =============================================================================
+
+class ThreatLevel(Enum):
+    """Enumeration of threat severity levels."""
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
 
 @dataclass
 class DetectionZone:
@@ -861,6 +869,72 @@ class RetailTheftDetector:
 # EXAMPLE USAGE
 # =============================================================================
 
+def create_demo_image(filename: str = "demo_store.jpg"):
+    """Create a demo image for testing without Azure."""
+    import cv2
+    import numpy as np
+    
+    # Create a simple store scene
+    img = np.ones((480, 640, 3), dtype=np.uint8) * 200
+    
+    # Add some colored rectangles to simulate a store
+    cv2.rectangle(img, (50, 100), (200, 400), (150, 150, 150), -1)  # Person
+    cv2.rectangle(img, (300, 150), (500, 350), (100, 100, 200), 2)  # Display
+    cv2.rectangle(img, (550, 50), (620, 150), (200, 100, 100), -1)  # Exit sign
+    
+    # Add text
+    cv2.putText(img, "DEMO STORE", (200, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)
+    cv2.putText(img, "Person", (80, 250), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
+    cv2.putText(img, "EXIT", (555, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+    
+    cv2.imwrite(filename, img)
+    return filename
+
+
+class MockVisionClient:
+    """Mock Azure Vision client for demo mode."""
+    
+    def analyze(self, image_data, visual_features):
+        """Return mock analysis results."""
+        from unittest.mock import MagicMock
+        
+        # Create mock person detection
+        mock_person = MagicMock()
+        mock_person.bounding_box = MagicMock(x=50, y=100, width=150, height=300)
+        mock_person.confidence = 0.92
+        
+        # Create mock object (bag)
+        mock_tag = MagicMock()
+        mock_tag.name = "bag"
+        mock_tag.confidence = 0.85
+        
+        mock_object = MagicMock()
+        mock_object.tags = [mock_tag]
+        mock_object.bounding_box = MagicMock(x=80, y=250, width=50, height=40)
+        
+        # Create mock tags
+        mock_tag1 = MagicMock()
+        mock_tag1.name = "person"
+        mock_tag1.confidence = 0.95
+        
+        mock_tag2 = MagicMock()
+        mock_tag2.name = "indoor"
+        mock_tag2.confidence = 0.88
+        
+        mock_tag3 = MagicMock()
+        mock_tag3.name = "retail"
+        mock_tag3.confidence = 0.82
+        
+        # Create result object
+        mock_result = MagicMock()
+        mock_result.people = MagicMock(list=[mock_person])
+        mock_result.objects = MagicMock(list=[mock_object])
+        mock_result.tags = MagicMock(list=[mock_tag1, mock_tag2, mock_tag3])
+        mock_result.caption = MagicMock(text="A person with a bag in a retail store")
+        
+        return mock_result
+
+
 def main():
     """Demonstration of the theft detection system."""
     
@@ -871,20 +945,86 @@ def main():
 ╚══════════════════════════════════════════════════════════════╝
 """)
     
+    # Try to load from .env file
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()  # Load .env file if it exists
+        print("✓ Loaded configuration from .env file\n")
+    except ImportError:
+        print("ℹ️  python-dotenv not installed. Install with: pip install python-dotenv")
+        print("   You can still use environment variables.\n")
+    
     # Get credentials from environment
     endpoint = os.getenv("AZURE_VISION_ENDPOINT")
     key = os.getenv("AZURE_VISION_KEY")
+    demo_mode = os.getenv("DEMO_MODE", "false").lower() == "true"
     
-    if not endpoint or not key:
-        print("⚠️  ERROR: Azure credentials not set!\n")
-        print("Set environment variables:")
-        print("  export AZURE_VISION_ENDPOINT='https://your-resource.cognitiveservices.azure.com/'")
-        print("  export AZURE_VISION_KEY='your-32-char-key'\n")
-        print("Or get them from Azure Portal:")
-        print("  1. Create Computer Vision resource")
-        print("  2. Go to Keys and Endpoint")
-        print("  3. Copy Key 1 and Endpoint\n")
+    # Check if we should run in demo mode
+    if demo_mode or (not endpoint or not key):
+        if not demo_mode and (not endpoint or not key):
+            print("⚠️  Azure credentials not found!\n")
+            print("Running in DEMO MODE (no Azure credentials required)\n")
+            print("To use Azure AI Vision:")
+            print("  1. Create a .env file with:")
+            print("     AZURE_VISION_ENDPOINT=https://your-resource.cognitiveservices.azure.com/")
+            print("     AZURE_VISION_KEY=your-32-char-key")
+            print("  2. Or set environment variables")
+            print("  3. Or get keys from Azure Portal:\n")
+            print("     - Create Computer Vision resource")
+            print("     - Go to Keys and Endpoint")
+            print("     - Copy Key 1 and Endpoint\n")
+        else:
+            print("🎭 DEMO MODE ENABLED\n")
+        
+        # Create demo detector with mock client
+        print("Initializing demo detector...")
+        detector = RetailTheftDetector(
+            endpoint="https://demo.cognitiveservices.azure.com/",
+            key="demo-key-32-characters-long-xx"
+        )
+        
+        # Replace with mock client
+        detector.vision_client = MockVisionClient()
+        
+        # Create demo image
+        print("Creating demo store image...")
+        demo_image = create_demo_image("demo_store.jpg")
+        print(f"✓ Demo image created: {demo_image}\n")
+        
+        # Run demo analysis
+        print("="*70)
+        print("DEMO: Analyzing Store Scene")
+        print("="*70)
+        
+        alerts = detector.analyze_frame(demo_image, frame_number=1)
+        
+        if alerts:
+            print(f"\n🎯 Demo Results: {len(alerts)} alert(s) detected\n")
+            for i, alert in enumerate(alerts, 1):
+                print(f"Alert {i}:")
+                print(f"  Type: {alert.alert_type}")
+                print(f"  Severity: {alert.severity}")
+                print(f"  Confidence: {alert.confidence:.1%}")
+                print(f"  Location: {alert.location}")
+                print(f"  Description: {alert.description}\n")
+        else:
+            print("\n✓ No suspicious activity detected in demo\n")
+        
+        # Generate demo report
+        detector.generate_report("demo_report.json")
+        
+        print("="*70)
+        print("Demo Complete!")
+        print("="*70)
+        print("\nNext Steps:")
+        print("  1. Check demo_store.jpg to see the analyzed image")
+        print("  2. Check demo_report.json for the full report")
+        print("  3. Add Azure keys to .env file to use real AI Vision")
+        print("="*70 + "\n")
         return
+    
+    # Real Azure mode
+    print("🔑 Azure credentials found - using real AI Vision\n")
     
     # Initialize detector
     detector = RetailTheftDetector(endpoint, key)

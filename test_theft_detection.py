@@ -22,8 +22,10 @@ Author: AI-102 Study Implementation
 import unittest
 import os
 import json
+import logging
 import tempfile
 import shutil
+import time
 from unittest.mock import Mock, MagicMock, patch, call
 from datetime import datetime
 from typing import List, Dict
@@ -345,8 +347,19 @@ class TestLoggingInstrumentation(unittest.TestCase):
     
     def tearDown(self):
         """Clean up after tests."""
+        # Close all logging handlers to release file locks
+        logging.shutdown()
+        
+        # Small delay to ensure file handles are released on Windows
+        time.sleep(0.1)
+        
         if os.path.exists(self.test_log_dir):
-            shutil.rmtree(self.test_log_dir)
+            try:
+                shutil.rmtree(self.test_log_dir)
+            except PermissionError:
+                # On Windows, files might still be locked, try again after a short wait
+                time.sleep(0.5)
+                shutil.rmtree(self.test_log_dir)
     
     
     def test_logger_initialization(self):
@@ -468,8 +481,20 @@ class TestIntegration(unittest.TestCase):
     def tearDown(self):
         """Clean up after integration tests."""
         self.patcher.stop()
+        
+        # Close all logging handlers to release file locks
+        logging.shutdown()
+        
+        # Small delay to ensure file handles are released on Windows
+        time.sleep(0.1)
+        
         if os.path.exists(self.test_dir):
-            shutil.rmtree(self.test_dir)
+            try:
+                shutil.rmtree(self.test_dir)
+            except PermissionError:
+                # On Windows, files might still be locked, try again after a short wait
+                time.sleep(0.5)
+                shutil.rmtree(self.test_dir)
     
     
     def _create_test_image(self, path: str):
